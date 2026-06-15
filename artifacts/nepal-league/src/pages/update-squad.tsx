@@ -1,0 +1,365 @@
+import { useState, useEffect } from "react";
+import { useSearch, Link } from "wouter";
+import { useListTeams, useListPlayers } from "@workspace/api-client-react";
+import { useUser } from "@clerk/react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Loader2, CheckCircle2, ChevronRight, Shield, Users,
+  UserPlus, Trash2, Pencil, Lock, LogIn,
+} from "lucide-react";
+
+const MIN_PLAYERS = 7;
+const MAX_PLAYERS = 15;
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+interface PlayerRow {
+  localId: string;
+  name: string;
+  number: string;
+}
+
+function newRow(): PlayerRow {
+  return { localId: crypto.randomUUID(), name: "", number: "" };
+}
+
+async function submitSquadUpdate(teamId: number, players: PlayerRow[], captainIndex: number | null): Promise<void> {
+  const res = await fetch("/api/register/update-squad", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      teamId,
+      captainIndex,
+      players: players.map(p => ({
+        name: p.name.trim(),
+        number: p.number ? parseInt(p.number) : null,
+        position: null,
+      })),
+    }),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error ?? "Failed to update squad");
+  }
+}
+
+const steps = ["Select Team", "Update Squad"];
+
+function StepIndicator({ step }: { step: 1 | 2 }) {
+  return (
+    <div className="flex items-center gap-1 justify-center text-sm mb-6 flex-wrap">
+      {steps.map((label, i) => {
+        const num = (i + 1) as 1 | 2;
+        const active = step === num;
+        const done = step > num;
+        return (
+          <div key={label} className="flex items-center gap-1">
+            {i > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground mx-0.5" />}
+            <div className={`flex items-center gap-1.5 font-semibold ${active ? "text-primary" : done ? "text-primary/60" : "text-muted-foreground"}`}>
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${active ? "bg-primary text-primary-foreground" : done ? "bg-primary/30 text-primary" : "bg-muted text-muted-foreground"}`}>
+                {done ? "✓" : num}
+              </span>
+              <span className="hidden sm:inline">{label}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function UpdateSquad() {
+  const { toast } = useToast();
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  const preTeamId = params.get("team") ? parseInt(params.get("team")!) : null;
+  const { isLoaded, isSignedIn, user } = useUser();
+
+  const { data: teams, isLoading: teamsLoading } = useListTeams();
+  const [step, setStep] = useState<1 | 2>(1);
+  const [teamId, setTeamId] = useState<number | null>(preTeamId);
+  const [captainIndex, setCaptainIndex] = useState<number | null>(null);
+  const [rows, setRows] = useState<PlayerRow[]>(Array.from({ length: MIN_PLAYERS }, newRow));
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const selectedTeam = teams?.find(t => t.id === teamId);
+  const { data: currentPlayers, isLoading: playersLoading } = useListPlayers(teamId ?? 0);
+
+  useEffect(() => {
+    if (teamId && step === 2 && currentPlayers) {
+      setRows(currentPlayers.length > 0
+        ? currentPlayers.map(p => ({ localId: crypto.randomUUID(), name: p.name, number: p.number?.toString() ?? "" }))
+        : Array.from({ length: MIN_PLAYERS }, newRow)
+      );
+      const capIdx = currentPlayers.findIndex(p => p.isCaptain);
+      setCaptainIndex(capIdx >= 0 ? capIdx : null);
+    }
+  }, [step, currentPlayers]);
+
+  const handleStep1Next = () => {
+    if (!teamId) { toast({ variant: "destructive", title: "Please select your team" }); return; }
+    setStep(2);
+  };
+
+  const handleSubmit = async () => {
+    if (!teamId) return;
+    const validRows = rows.filter(r => r.name.trim());
+    if (validRows.length < MIN_PLAYERS) {
+      toast({ variant: "destructive", title: `At least ${MIN_PLAYERS} players required`, description: `You have ${validRows.length}.` });
+      return;
+    }
+    const validIndexOf = (localId: string) => validRows.findIndex(r => r.localId === localId);
+    const captainValidIndex = captainIndex != null
+      ? validIndexOf(rows.filter(r => r.name.trim())[captainIndex]?.localId ?? "")
+      : null;
+    setSubmitting(true);
+    try {
+      await submitSquadUpdate(teamId, validRows, captainValidIndex !== -1 ? captainValidIndex : null);
+      setSubmitted(true);
+    } catch (err) {
+      toast({ variant: "destructive", title: "Failed to save squad", description: err instanceof Error ? err.message : "Unknown error" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const updateRow = (localId: string, field: keyof Omit<PlayerRow, "localId">, value: string) => {
+    setRows(rs => rs.map(r => r.localId === localId ? { ...r, [field]: value } : r));
+  };
+  const removeRow = (localId: string) => {
+    if (rows.length <= 1) return;
+    setRows(rs => rs.filter(r => r.localId !== localId));
+  };
+  const addRow = () => {
+    if (rows.length >= MAX_PLAYERS) return;
+    setRows(rs => [...rs, newRow()]);
+  };
+
+  // Sign-in guard
+  if (isLoaded && !isSignedIn) {
+    return (
+      <div className="flex flex-col items-center text-center gap-6 py-20 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-md mx-auto">
+        <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+          <LogIn className="h-9 w-9 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-black">Sign In Required</h2>
+          <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
+            Sign in with Google or Facebook to verify your identity and update your team's squad.
+          </p>
+        </div>
+        <Link href={`${basePath}/sign-in?redirect_url=${basePath}/update-squad${teamId ? `?team=${teamId}` : ""}`}>
+          <Button size="lg" className="font-bold">
+            <LogIn className="h-4 w-4 mr-2" /> Sign In to Continue
+          </Button>
+        </Link>
+        <Link href="/" className="text-xs text-muted-foreground hover:text-foreground">← Back to home</Link>
+      </div>
+    );
+  }
+
+  // Squad locked once admin has approved
+  if (selectedTeam?.squadStatus === "approved") {
+    return (
+      <div className="flex flex-col items-center text-center gap-6 py-20 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-md mx-auto">
+        <div className="w-20 h-20 rounded-full bg-yellow-500/10 flex items-center justify-center">
+          <Lock className="h-10 w-10 text-yellow-600" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-black">Squad Locked</h2>
+          <p className="text-muted-foreground mt-2">
+            <span className="font-bold text-foreground">{selectedTeam.name}</span>'s squad has been approved by the admin and can no longer be edited by team managers.
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">Contact the tournament admin to request changes.</p>
+        </div>
+        <div className="flex gap-3 flex-wrap justify-center">
+          <Link href="/teams"><Button variant="outline"><Users className="h-4 w-4 mr-2" /> View All Squads</Button></Link>
+          <Link href="/"><Button>Back to Home</Button></Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (submitted && selectedTeam) {
+    return (
+      <div className="flex flex-col items-center text-center gap-6 py-20 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-md mx-auto">
+        <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+          <CheckCircle2 className="h-10 w-10 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-black">Squad Updated!</h2>
+          <p className="text-muted-foreground mt-2">
+            <span className="font-bold text-foreground">{selectedTeam.name}</span>'s squad has been saved for the upcoming tournament.
+          </p>
+        </div>
+        <div className="flex gap-3 flex-wrap justify-center">
+          <Link href="/teams"><Button variant="outline"><Users className="h-4 w-4 mr-2" /> View All Squads</Button></Link>
+          <Link href="/"><Button>Back to Home</Button></Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto">
+      <div>
+        <h1 className="text-3xl font-black tracking-tight uppercase italic flex items-center gap-3">
+          <Pencil className="h-7 w-7 text-primary" /> Update Squad
+        </h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Already registered? Update your team's player list for the upcoming tournament.
+        </p>
+        {isSignedIn && user && (
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+            <Shield className="h-3 w-3 text-primary" />
+            Signed in as <span className="font-semibold text-foreground ml-1">{user.primaryEmailAddress?.emailAddress}</span>
+          </p>
+        )}
+      </div>
+
+      <StepIndicator step={step} />
+
+      {/* ── Step 1: Select team ───────────────────────────────────────── */}
+      {step === 1 && (
+        <Card>
+          <CardContent className="p-6 space-y-5">
+            <div className="space-y-2">
+              <Label>Your Team</Label>
+              {teamsLoading ? (
+                <div className="flex items-center gap-2 text-muted-foreground text-sm py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading teams…
+                </div>
+              ) : (
+                <Select
+                  value={teamId?.toString() ?? ""}
+                  onValueChange={val => setTeamId(parseInt(val))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teams?.map(t => (
+                      <SelectItem key={t.id} value={t.id.toString()}>
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.primaryColor ?? "#888" }} />
+                          {t.name} ({t.shortName})
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <Button onClick={handleStep1Next} disabled={!teamId} className="w-full">
+              <ChevronRight className="h-4 w-4 mr-2" /> Continue to Squad Editor
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Step 2: Squad editor ─────────────────────────────────────── */}
+      {step === 2 && (
+        <div className="space-y-4">
+          {selectedTeam && (
+            <div className="flex items-center gap-3 p-4 rounded-xl border" style={{ borderColor: `${selectedTeam.primaryColor ?? "#888"}40`, background: `${selectedTeam.primaryColor ?? "#888"}08` }}>
+              <Shield className="h-5 w-5 flex-shrink-0" style={{ color: selectedTeam.primaryColor ?? "#888" }} />
+              <div>
+                <p className="font-bold text-sm">{selectedTeam.name}</p>
+                <p className="text-xs text-muted-foreground">Edit your squad below. Changes replace the full current list.</p>
+              </div>
+              <button onClick={() => setStep(1)} className="ml-auto text-xs text-muted-foreground hover:text-foreground underline">Change team</button>
+            </div>
+          )}
+
+          {playersLoading ? (
+            <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+          ) : (
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                <div className="grid grid-cols-[auto_1fr_auto_auto] gap-2 px-1">
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground w-8 text-center">C</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Player Name</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground w-16 text-center">Jersey #</span>
+                  <span />
+                </div>
+
+                {rows.map((row, i) => {
+                  const isCap = captainIndex === i;
+                  return (
+                    <div key={row.localId} className={`grid grid-cols-[auto_1fr_auto_auto] gap-2 items-center rounded-lg transition-colors ${isCap ? "bg-yellow-500/8" : ""}`}>
+                      <button
+                        type="button"
+                        title={isCap ? "Captain" : "Set as captain"}
+                        onClick={() => setCaptainIndex(isCap ? null : i)}
+                        className={`w-8 h-9 rounded-md flex items-center justify-center text-xs font-black border transition-colors flex-shrink-0 ${isCap ? "bg-yellow-500/20 text-yellow-500 border-yellow-500/50" : "text-muted-foreground border-border hover:text-yellow-500 hover:border-yellow-500/40"}`}
+                      >
+                        C
+                      </button>
+                      <Input
+                        placeholder={`Player ${i + 1}`}
+                        value={row.name}
+                        onChange={e => updateRow(row.localId, "name", e.target.value)}
+                        className="h-9 text-sm"
+                      />
+                      <Input
+                        placeholder="—"
+                        value={row.number}
+                        onChange={e => updateRow(row.localId, "number", e.target.value.replace(/\D/g, ""))}
+                        className="h-9 text-sm text-center w-16"
+                        maxLength={2}
+                      />
+                      <button
+                        onClick={() => {
+                          if (captainIndex === i) setCaptainIndex(null);
+                          else if (captainIndex != null && captainIndex > i) setCaptainIndex(captainIndex - 1);
+                          removeRow(row.localId);
+                        }}
+                        disabled={rows.length <= 1}
+                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                <button
+                  onClick={addRow}
+                  disabled={rows.length >= MAX_PLAYERS}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-border py-2.5 text-sm text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <UserPlus className="h-4 w-4" /> Add player ({rows.length}/{MAX_PLAYERS})
+                </button>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+            <span>{rows.filter(r => r.name.trim()).length} of {MIN_PLAYERS}+ players filled</span>
+            <span className={rows.filter(r => r.name.trim()).length >= MIN_PLAYERS ? "text-primary font-semibold" : "text-destructive font-semibold"}>
+              {rows.filter(r => r.name.trim()).length >= MIN_PLAYERS ? "✓ Minimum met" : `Need ${MIN_PLAYERS - rows.filter(r => r.name.trim()).length} more`}
+            </span>
+          </div>
+
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || rows.filter(r => r.name.trim()).length < MIN_PLAYERS}
+            className="w-full"
+            size="lg"
+          >
+            {submitting
+              ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving squad…</>
+              : <><CheckCircle2 className="h-4 w-4 mr-2" /> Save Squad</>}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,497 @@
+import { useState, useEffect } from "react";
+import { useRoute } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import { 
+  useGetMatch,
+  useStartMatch,
+  useFinishMatch,
+  useResetMatch,
+  useAddGoal,
+  useAddCard,
+  useUpdateMatch,
+  getGetMatchQueryKey,
+  useListMatchEvents,
+  getListMatchEventsQueryKey,
+  useListPlayers
+} from "@workspace/api-client-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, Play, Square, RotateCcw, Target, AlertTriangle, Clock, Lock } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { format } from "date-fns";
+import { TeamLogo } from "@/components/team-logo";
+
+export default function AdminMatchDetail() {
+  const [, params] = useRoute("/admin/match/:id");
+  const matchId = parseInt(params?.id || "0");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: match, isLoading } = useGetMatch(matchId, {
+    query: { refetchInterval: 5000 } as never
+  });
+  
+  const { data: events } = useListMatchEvents(matchId, {
+    query: { refetchInterval: 5000 } as never
+  });
+
+  // Squads of each team — goal scorers must be chosen from the scoring team's players
+  const { data: homePlayers, isLoading: homePlayersLoading } = useListPlayers(match?.homeTeamId ?? 0, {
+    query: { enabled: !!match?.homeTeamId } as never,
+  });
+  const { data: awayPlayers, isLoading: awayPlayersLoading } = useListPlayers(match?.awayTeamId ?? 0, {
+    query: { enabled: !!match?.awayTeamId } as never,
+  });
+
+  // Kickoff time editor state
+  const [kickoffTime, setKickoffTime] = useState("");
+  const [showTimeEditor, setShowTimeEditor] = useState(false);
+
+  useEffect(() => {
+    if (match?.scheduledTime) {
+      // Extract HH:MM from ISO string e.g. "2026-06-28T10:15:00" → "10:15"
+      setKickoffTime(match.scheduledTime.slice(11, 16));
+    }
+  }, [match?.scheduledTime]);
+
+  // Goal Form State
+  const [homeScorer, setHomeScorer] = useState("");
+  const [awayScorer, setAwayScorer] = useState("");
+  const [homeGoalMinute, setHomeGoalMinute] = useState("");
+  const [awayGoalMinute, setAwayGoalMinute] = useState("");
+  const [isOwnGoal, setIsOwnGoal] = useState(false);
+
+  // Card Form State
+  const [homeCardPlayer, setHomeCardPlayer] = useState("");
+  const [awayCardPlayer, setAwayCardPlayer] = useState("");
+  const [homeCardMinute, setHomeCardMinute] = useState("");
+  const [awayCardMinute, setAwayCardMinute] = useState("");
+
+  const invalidateQueries = () => {
+    queryClient.invalidateQueries({ queryKey: getGetMatchQueryKey(matchId) });
+    queryClient.invalidateQueries({ queryKey: getListMatchEventsQueryKey(matchId) });
+  };
+
+  const startMutation = useStartMatch({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Match Started" });
+        invalidateQueries();
+      }
+    }
+  });
+
+  const finishMutation = useFinishMatch({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Match Finished" });
+        invalidateQueries();
+      }
+    }
+  });
+
+  const resetMutation = useResetMatch({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Match Reset to Upcoming" });
+        invalidateQueries();
+      }
+    }
+  });
+
+  const addGoalMutation = useAddGoal({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Goal Added!" });
+        setHomeScorer("");
+        setAwayScorer("");
+        setHomeGoalMinute("");
+        setAwayGoalMinute("");
+        setIsOwnGoal(false);
+        invalidateQueries();
+      },
+      onError: (error) => {
+        const data = (error as { data?: unknown })?.data;
+        const description =
+          data && typeof data === "object" && "error" in data
+            ? String((data as { error: unknown }).error)
+            : "The scorer must be a player from the same team.";
+        toast({ variant: "destructive", title: "Could not add goal", description });
+      }
+    }
+  });
+
+  const addCardMutation = useAddCard({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Card Added" });
+        setHomeCardPlayer("");
+        setAwayCardPlayer("");
+        setHomeCardMinute("");
+        setAwayCardMinute("");
+        invalidateQueries();
+      }
+    }
+  });
+
+  const updateMatchMutation = useUpdateMatch({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Kickoff time updated" });
+        setShowTimeEditor(false);
+        invalidateQueries();
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Failed to update time" });
+      }
+    }
+  });
+
+  const handleSaveTime = () => {
+    if (!kickoffTime || !match?.scheduledTime) return;
+    // Replace only the time portion of the stored ISO string
+    const datePart = match.scheduledTime.slice(0, 10); // "2026-06-28"
+    const newScheduledTime = `${datePart}T${kickoffTime}:00`;
+    updateMatchMutation.mutate({ id: matchId, data: { scheduledTime: newScheduledTime } });
+  };
+
+  const handleAddHomeGoal = () => {
+    if (!homeScorer || !homeGoalMinute) {
+      toast({ variant: "destructive", title: "Error", description: "Scorer and minute required" });
+      return;
+    }
+    addGoalMutation.mutate({
+      matchId,
+      data: { teamId: match!.homeTeamId, scorerName: homeScorer, minute: parseInt(homeGoalMinute), isOwnGoal }
+    });
+  };
+
+  const handleAddAwayGoal = () => {
+    if (!awayScorer || !awayGoalMinute) {
+      toast({ variant: "destructive", title: "Error", description: "Scorer and minute required" });
+      return;
+    }
+    addGoalMutation.mutate({
+      matchId,
+      data: { teamId: match!.awayTeamId, scorerName: awayScorer, minute: parseInt(awayGoalMinute), isOwnGoal }
+    });
+  };
+
+  const handleAddHomeCard = (cardType: 'yellow' | 'red') => {
+    if (!homeCardPlayer || !homeCardMinute) {
+      toast({ variant: "destructive", title: "Error", description: "Player name and minute required" });
+      return;
+    }
+    addCardMutation.mutate({
+      matchId,
+      data: { teamId: match!.homeTeamId, playerName: homeCardPlayer, cardType, minute: parseInt(homeCardMinute) }
+    });
+  };
+
+  const handleAddAwayCard = (cardType: 'yellow' | 'red') => {
+    if (!awayCardPlayer || !awayCardMinute) {
+      toast({ variant: "destructive", title: "Error", description: "Player name and minute required" });
+      return;
+    }
+    addCardMutation.mutate({
+      matchId,
+      data: { teamId: match!.awayTeamId, playerName: awayCardPlayer, cardType, minute: parseInt(awayCardMinute) }
+    });
+  };
+
+  if (isLoading || !match) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Scoreboard Header */}
+      <Card className="border-2 border-primary/20 bg-card overflow-hidden">
+        <div className="bg-primary/5 p-4 flex justify-between items-center border-b border-primary/10">
+          <Badge variant={match.status === 'live' ? 'default' : match.status === 'finished' ? 'secondary' : 'outline'} className={match.status === 'live' ? 'animate-pulse' : ''}>
+            {match.status.toUpperCase()}
+          </Badge>
+          <div className="text-sm font-bold text-muted-foreground">
+            {match.matchType === "final" ? (
+              <span className="text-amber-500">🏆 FINAL</span>
+            ) : (
+              `Match ${match.matchNumber}`
+            )} • Pitch {match.pitch}
+          </div>
+        </div>
+        <CardContent className="p-5 md:p-6 grid grid-cols-[1fr_auto_1fr] items-center gap-4 md:gap-6">
+          <div className="flex items-center justify-end gap-2.5 md:gap-3 min-w-0">
+            <TeamLogo size="md" name={match.homeTeamName} shortName={match.homeTeamShortName} logoUrl={match.homeTeamLogo} />
+            <h2 className="text-lg md:text-2xl font-black truncate min-w-0">{match.homeTeamName}</h2>
+          </div>
+          
+          <div className="bg-background border-2 border-border shadow-inner px-5 py-3 md:px-6 rounded-xl font-mono text-4xl md:text-5xl font-black tracking-tighter text-center">
+            {match.homeScore} - {match.awayScore}
+          </div>
+          
+          <div className="flex items-center justify-start gap-2.5 md:gap-3 min-w-0">
+            <h2 className="text-lg md:text-2xl font-black truncate min-w-0">{match.awayTeamName}</h2>
+            <TeamLogo size="md" name={match.awayTeamName} shortName={match.awayTeamShortName} logoUrl={match.awayTeamLogo} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Match Controls */}
+      <div className="flex gap-4 justify-center bg-muted/30 p-4 rounded-xl border">
+        {match.status === 'upcoming' && (
+          <Button size="lg" className="w-full md:w-auto" onClick={() => startMutation.mutate({ id: matchId })} disabled={startMutation.isPending}>
+            <Play className="mr-2 h-5 w-5" /> Start Match
+          </Button>
+        )}
+        {match.status === 'live' && (
+          <Button size="lg" variant="destructive" className="w-full md:w-auto" onClick={() => finishMutation.mutate({ id: matchId })} disabled={finishMutation.isPending}>
+            <Square className="mr-2 h-5 w-5" /> End Match
+          </Button>
+        )}
+        {(match.status === 'live' || match.status === 'finished') && (
+          <Button size="lg" variant="outline" onClick={() => resetMutation.mutate({ id: matchId })} disabled={resetMutation.isPending}>
+            <RotateCcw className="mr-2 h-5 w-5" /> Reset to Upcoming
+          </Button>
+        )}
+      </div>
+
+      {/* Kickoff Time Editor */}
+      <div className="bg-muted/30 rounded-xl border p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Kickoff time:</span>
+            <span className="font-bold">{match.scheduledTime.slice(11, 16)}</span>
+            <span className="text-muted-foreground">· Pitch {match.pitch}</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setShowTimeEditor(!showTimeEditor)}>
+            {showTimeEditor ? "Cancel" : "Change Time"}
+          </Button>
+        </div>
+        {showTimeEditor && (
+          <div className="mt-4 flex items-end gap-3">
+            <div className="space-y-1 flex-1">
+              <Label htmlFor="kickoff-time">New Kickoff Time</Label>
+              <Input
+                id="kickoff-time"
+                type="time"
+                value={kickoffTime}
+                onChange={(e) => setKickoffTime(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <Button onClick={handleSaveTime} disabled={updateMatchMutation.isPending}>
+              {updateMatchMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Home Team Panel */}
+        <Card className="border-primary/20">
+          <CardHeader className="bg-muted/30 border-b pb-4">
+            <CardTitle>{match.homeTeamName}</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-6">
+            {match.status === 'upcoming' ? (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-3">
+                <Lock className="h-8 w-8 opacity-30" />
+                <p className="text-sm font-medium">Match not started yet</p>
+                <p className="text-xs text-muted-foreground/60">Start the match to add goals and cards</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  <h3 className="font-bold uppercase tracking-wider text-sm flex items-center gap-2">
+                    <Target className="h-4 w-4" /> Add Goal
+                  </h3>
+                  <div className="grid gap-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <ScorerField players={homePlayers} isLoading={homePlayersLoading} value={homeScorer} onChange={setHomeScorer} />
+                      <Input type="number" placeholder="Minute" value={homeGoalMinute} onChange={(e) => setHomeGoalMinute(e.target.value)} />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch id="own-goal-home" checked={isOwnGoal} onCheckedChange={setIsOwnGoal} />
+                      <Label htmlFor="own-goal-home">Own Goal</Label>
+                    </div>
+                    <Button className="w-full font-bold" onClick={handleAddHomeGoal} disabled={addGoalMutation.isPending}>
+                      +1 Goal Home
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t space-y-4">
+                  <h3 className="font-bold uppercase tracking-wider text-sm flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" /> Add Card
+                  </h3>
+                  <div className="grid gap-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <ScorerField players={homePlayers} isLoading={homePlayersLoading} value={homeCardPlayer} onChange={setHomeCardPlayer} />
+                      <Input type="number" placeholder="Minute" value={homeCardMinute} onChange={(e) => setHomeCardMinute(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button variant="outline" className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-600 border-yellow-500/50" onClick={() => handleAddHomeCard('yellow')} disabled={addCardMutation.isPending}>
+                        Yellow
+                      </Button>
+                      <Button variant="outline" className="bg-red-500/10 hover:bg-red-500/20 text-red-600 border-red-500/50" onClick={() => handleAddHomeCard('red')} disabled={addCardMutation.isPending}>
+                        Red
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Away Team Panel */}
+        <Card className="border-primary/20">
+          <CardHeader className="bg-muted/30 border-b pb-4">
+            <CardTitle className="text-right">{match.awayTeamName}</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-6">
+            {match.status === 'upcoming' ? (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-3">
+                <Lock className="h-8 w-8 opacity-30" />
+                <p className="text-sm font-medium">Match not started yet</p>
+                <p className="text-xs text-muted-foreground/60">Start the match to add goals and cards</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  <h3 className="font-bold uppercase tracking-wider text-sm flex items-center gap-2 justify-end">
+                    Add Goal <Target className="h-4 w-4" />
+                  </h3>
+                  <div className="grid gap-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input type="number" placeholder="Minute" value={awayGoalMinute} onChange={(e) => setAwayGoalMinute(e.target.value)} />
+                      <ScorerField players={awayPlayers} isLoading={awayPlayersLoading} value={awayScorer} onChange={setAwayScorer} align />
+                    </div>
+                    <div className="flex items-center justify-end space-x-2">
+                      <Label htmlFor="own-goal-away">Own Goal</Label>
+                      <Switch id="own-goal-away" checked={isOwnGoal} onCheckedChange={setIsOwnGoal} />
+                    </div>
+                    <Button className="w-full font-bold" onClick={handleAddAwayGoal} disabled={addGoalMutation.isPending}>
+                      +1 Goal Away
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t space-y-4">
+                  <h3 className="font-bold uppercase tracking-wider text-sm flex items-center gap-2 justify-end">
+                    Add Card <AlertTriangle className="h-4 w-4" />
+                  </h3>
+                  <div className="grid gap-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input type="number" placeholder="Minute" value={awayCardMinute} onChange={(e) => setAwayCardMinute(e.target.value)} />
+                      <ScorerField players={awayPlayers} isLoading={awayPlayersLoading} value={awayCardPlayer} onChange={setAwayCardPlayer} align />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button variant="outline" className="bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-600 border-yellow-500/50" onClick={() => handleAddAwayCard('yellow')} disabled={addCardMutation.isPending}>
+                        Yellow
+                      </Button>
+                      <Button variant="outline" className="bg-red-500/10 hover:bg-red-500/20 text-red-600 border-red-500/50" onClick={() => handleAddAwayCard('red')} disabled={addCardMutation.isPending}>
+                        Red
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Match Events</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {events && events.length > 0 ? (
+            <div className="space-y-3">
+              {events.map(event => (
+                <div key={event.id} className="flex items-center gap-4 p-3 border rounded-lg bg-muted/30">
+                  <div className="font-mono font-bold text-primary w-12">{event.minute}'</div>
+                  <Badge variant="outline">{event.eventType}</Badge>
+                  <div className="font-medium flex-1">
+                    {event.playerName && <span className="font-bold mr-2">{event.playerName}</span>}
+                    {event.description}
+                  </div>
+                  <div className="text-sm text-muted-foreground">{event.teamName}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No events recorded yet.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+type ScorerPlayer = { id: number; name: string; number?: number | null };
+
+function ScorerField({
+  players,
+  isLoading,
+  value,
+  onChange,
+  align,
+}: {
+  players: ScorerPlayer[] | undefined;
+  isLoading?: boolean;
+  value: string;
+  onChange: (v: string) => void;
+  align?: boolean;
+}) {
+  // While the squad is still loading, avoid showing free text (which the backend would reject)
+  if (isLoading) {
+    return (
+      <Input
+        placeholder="Loading squad…"
+        disabled
+        className={align ? "text-right" : undefined}
+      />
+    );
+  }
+  // Teams without a registered squad fall back to free text so goals can still be recorded
+  if (!players || players.length === 0) {
+    return (
+      <Input
+        placeholder="Scorer Name"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={align ? "text-right" : undefined}
+      />
+    );
+  }
+  return (
+    <Select value={value || undefined} onValueChange={onChange}>
+      <SelectTrigger>
+        <SelectValue placeholder="Scorer" />
+      </SelectTrigger>
+      <SelectContent>
+        {players.map((p) => (
+          <SelectItem key={p.id} value={p.name}>
+            {p.number ? `#${p.number} ` : ""}{p.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}

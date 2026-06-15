@@ -1,0 +1,161 @@
+import { Shield, Users, MapPin, Star, Heart, Trophy, Mail, Phone } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { useGetClubSettings } from "@workspace/api-client-react";
+
+const DEFAULT_TAGLINE =
+  "A Nepalese football club rooted in community, culture, and the love of the game — representing the Nepalese diaspora in Ostrobothnia.";
+
+const DEFAULT_STORY = [
+  "Kokkola Soccer Boys was born out of a simple idea: bring the Nepalese community in Kokkola together through football. What started as informal matches between friends quickly grew into an organised club with a shared identity and a green jersey to call our own.",
+  "Over the years, KSB has become a cornerstone of the Nepalese community in Central Ostrobothnia — organising matches, tournaments, and social events that connect people across generations and backgrounds.",
+  "In 2026, KSB proudly hosts the Ostrobothnia Nepal Super League — bringing together five clubs from across Finland for a day of top-level Nepalese football at Santahaka Tekonurmikenttä.",
+];
+
+const VALUE_ICONS = [Heart, Shield, Star, Users];
+
+const DEFAULT_VALUES = [
+  { title: "Community", description: "Founded by Nepalese living in Kokkola, KSB is more than a football club — it is a gathering place for culture, friendship, and belonging." },
+  { title: "Sportsmanship", description: "We play with passion and respect. On and off the pitch, our players represent the values of fair play and team spirit." },
+  { title: "Excellence", description: "From grassroots training to competitive tournaments, we push each other to grow as players and as people." },
+  { title: "Inclusion", description: "Everyone is welcome. KSB opens its doors to all who share a love for the beautiful game and the Nepalese community in Finland." },
+];
+
+export default function About() {
+  const { data: settings } = useGetClubSettings();
+
+  const story =
+    settings?.storyParagraphs && settings.storyParagraphs.length > 0
+      ? settings.storyParagraphs
+      : DEFAULT_STORY;
+
+  const tagline = settings?.tagline || DEFAULT_TAGLINE;
+  const email = settings?.email || "info@kokkolasoccerboys.cc";
+  const phone = settings?.phone || "+358 413 174 494";
+  const homeGround = settings?.homeGround || "Kokkola, Finland";
+  const values =
+    settings?.values && settings.values.length > 0 ? settings.values : DEFAULT_VALUES;
+  const color = settings?.primaryColor || "#16a34a";
+
+  return (
+    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-3xl">
+
+      {/* Hero */}
+      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+        <img
+          src="/ksb-logo.png"
+          alt="Kokkola Soccer Boys"
+          className="w-28 h-28 rounded-2xl object-contain bg-muted border p-2 flex-shrink-0"
+        />
+        <div className="text-center sm:text-left space-y-2">
+          <p className="text-xs font-bold uppercase tracking-widest text-primary">Est. Kokkola, Finland</p>
+          <h1 className="text-3xl font-black tracking-tight leading-tight">
+            Kokkola Soccer Boys
+          </h1>
+          <p className="text-muted-foreground leading-relaxed">{tagline}</p>
+        </div>
+      </div>
+
+      {/* Story */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-8 bg-primary rounded-full" />
+          <h2 className="text-xl font-black uppercase tracking-wide">Our Story</h2>
+        </div>
+        <div className="space-y-4 text-muted-foreground leading-relaxed pl-4 border-l border-border">
+          {story.map((para, i) => (
+            <p key={i}>{para}</p>
+          ))}
+        </div>
+      </div>
+
+      {/* Values */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-8 bg-primary rounded-full" />
+          <h2 className="text-xl font-black uppercase tracking-wide">What We Stand For</h2>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {values.map(({ title, description }, i) => {
+            const Icon = VALUE_ICONS[i % VALUE_ICONS.length];
+            return (
+              <Card key={title} className="border-border/60">
+                <CardContent className="p-5 flex gap-4">
+                  <div className="p-2 rounded-xl bg-primary/10 h-fit">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold mb-1">{title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Identity strip */}
+      <div className="rounded-2xl border overflow-hidden">
+        <div className="h-2" style={{ backgroundColor: color }} />
+        <div className="p-6 grid sm:grid-cols-3 gap-6 text-center">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Club Colours</p>
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <div className="w-6 h-6 rounded-full border-2 border-white/20" style={{ backgroundColor: color }} />
+              <span className="text-sm font-semibold">KSB</span>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Home Ground</p>
+            <div className="flex items-center justify-center gap-1.5 mt-2">
+              <MapPin className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold">{homeGround}</span>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">Tournament</p>
+            <div className="flex items-center justify-center gap-1.5 mt-2">
+              <Trophy className="h-4 w-4 text-yellow-500" />
+              <span className="text-sm font-semibold">ONSL 2026 Hosts</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Contact */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-1 h-8 bg-primary rounded-full" />
+          <h2 className="text-xl font-black uppercase tracking-wide">Get in Touch</h2>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <a
+            href={`mailto:${email}`}
+            className="flex items-center gap-3 p-4 rounded-xl bg-muted/50 border hover:border-primary transition-colors flex-1"
+          >
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Mail className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Email</p>
+              <p className="font-semibold text-sm">{email}</p>
+            </div>
+          </a>
+          <a
+            href={`tel:${phone.replace(/\s/g, "")}`}
+            className="flex items-center gap-3 p-4 rounded-xl bg-muted/50 border hover:border-primary transition-colors flex-1"
+          >
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Phone className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Phone</p>
+              <p className="font-semibold text-sm">{phone}</p>
+            </div>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  );
+}
