@@ -1,6 +1,6 @@
-import app from "./app";
-import { logger } from "./lib/logger";
-import { seed } from "./seed";
+import app from "./app.js";
+import { logger } from "./lib/logger.js";
+import { seed } from "./seed.js";
 
 // In Vercel serverless, PORT is not needed - export app directly
 export default app;
