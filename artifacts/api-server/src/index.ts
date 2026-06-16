@@ -22,7 +22,7 @@ if (process.env.VERCEL !== "1") {
   }
 
   seed().then(() => {
-    app.listen(port, (err) => {
+    app.listen(port, (err: Error) => {
       if (err) {
         logger.error({ err }, "Error listening on port");
         process.exit(1);
