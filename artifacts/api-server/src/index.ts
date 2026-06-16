@@ -1,8 +1,9 @@
 import app from "./app.js";
 import { logger } from "./lib/logger.js";
 import { seed } from "./seed.js";
+import http from "http";
 
-// In Vercel serverless, PORT is not needed - export app directly
+// Export app for Vercel serverless
 export default app;
 
 // Only start server if running locally (not on Vercel)
@@ -22,12 +23,13 @@ if (process.env.VERCEL !== "1") {
   }
 
   seed().then(() => {
-    app.listen(port, (err: Error) => {
-      if (err) {
-        logger.error({ err }, "Error listening on port");
-        process.exit(1);
-      }
+    const server = http.createServer(app);
+    server.listen(port, () => {
       logger.info({ port }, "Server listening");
+    });
+    server.on("error", (err: Error) => {
+      logger.error({ err }, "Error listening on port");
+      process.exit(1);
     });
   });
 }
