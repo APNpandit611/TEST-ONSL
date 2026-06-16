@@ -1,4 +1,4 @@
-import express, { type Application, type Request, type Response, type NextFunction } from "express";
+import express from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import cookieParser from "cookie-parser";
@@ -12,7 +12,8 @@ import {
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware.js";
 
-const app: Application = express();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const app: any = express();
 
 app.use(
   (pinoHttp as any)({
@@ -40,9 +41,9 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser(process.env.SESSION_SECRET || "nepal-league-secret"));
 app.use(
-  clerkMiddleware((req: Request) => ({
+  clerkMiddleware((req: any) => ({
     publishableKey: publishableKeyFromHost(
-      getClerkProxyHost(req as any) ?? "",
+      getClerkProxyHost(req) ?? "",
       process.env.CLERK_PUBLISHABLE_KEY,
     ),
   })),

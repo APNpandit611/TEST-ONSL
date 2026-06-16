@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { COOKIE_NAME, verifySessionToken } from "../lib/session";
+import { COOKIE_NAME, verifySessionToken } from "../lib/session.js";
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   if (!verifySessionToken(req.cookies?.[COOKIE_NAME])) {

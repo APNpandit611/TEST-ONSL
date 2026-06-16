@@ -1,26 +1,25 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { requireAuth } from "../middleware/requireAuth";
-import healthRouter from "./health";
-import authRouter from "./auth";
-import teamsRouter from "./teams";
-import matchesRouter from "./matches";
-import goalsRouter from "./goals";
-import cardsRouter from "./cards";
-import matchEventsRouter from "./matchEvents";
-import standingsRouter from "./standings";
-import statsRouter from "./stats";
-import tournamentRouter from "./tournament";
-import tournamentInfoRouter from "./tournamentInfo";
-import playersRouter from "./players";
-import otpRouter from "./otp";
-import announcementsRouter from "./announcements";
-import clubApplicationsRouter from "./clubApplications";
-import clubSettingsRouter from "./clubSettings";
-import seasonArchivesRouter from "./seasonArchives";
+import { requireAuth } from "../middleware/requireAuth.js";
+import healthRouter from "./health.js";
+import authRouter from "./auth.js";
+import teamsRouter from "./teams.js";
+import matchesRouter from "./matches.js";
+import goalsRouter from "./goals.js";
+import cardsRouter from "./cards.js";
+import matchEventsRouter from "./matchEvents.js";
+import standingsRouter from "./standings.js";
+import statsRouter from "./stats.js";
+import tournamentRouter from "./tournament.js";
+import tournamentInfoRouter from "./tournamentInfo.js";
+import playersRouter from "./players.js";
+import otpRouter from "./otp.js";
+import announcementsRouter from "./announcements.js";
+import clubApplicationsRouter from "./clubApplications.js";
+import clubSettingsRouter from "./clubSettings.js";
+import seasonArchivesRouter from "./seasonArchives.js";
 
 const router: IRouter = Router();
 
-// Public paths that allow writes without a session
 const PUBLIC_WRITE = [
   "/auth/login",
   "/auth/logout",
@@ -30,13 +29,7 @@ const PUBLIC_WRITE_PREFIX = [
   "/otp/",
 ];
 
-// Protect all state-mutating requests with a session check.
-// GET / HEAD / OPTIONS are public (read-only) EXCEPT under /admin, whose reads
-// can expose PII (applications) or unpublished content and so always require a
-// session. Public write paths (login, registration, OTP, club applications)
-// remain exempt.
 router.use((req: Request, res: Response, next: NextFunction): void => {
-  // Admin endpoints always require a session — including reads.
   if (req.path === "/admin" || req.path.startsWith("/admin/")) {
     requireAuth(req, res, next);
     return;
@@ -46,7 +39,6 @@ router.use((req: Request, res: Response, next: NextFunction): void => {
   }
   if (PUBLIC_WRITE.includes(req.path)) return next();
   if (PUBLIC_WRITE_PREFIX.some(p => req.path.startsWith(p))) return next();
-  // Public: anyone can submit a club membership application
   if (req.path === "/club-applications" && req.method === "POST") return next();
   requireAuth(req, res, next);
 });
