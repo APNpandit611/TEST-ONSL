@@ -1,14 +1,10 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "src/index.ts",
-      "use": "@vercel/node",
-      "config": {
-        "installCommand": "pnpm install --no-frozen-lockfile --ignore-scripts"
-      }
+  "functions": {
+    "src/index.ts": {
+      "runtime": "@vercel/node@5.0.2"
     }
-  ],
+  },
   "routes": [
     {
       "src": "/(.*)",
