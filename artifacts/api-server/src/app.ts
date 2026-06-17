@@ -24,7 +24,9 @@ app.use(
         };
       },
       res(res: any) {
-        return { statusCode: res.statusCode },
+        return {
+          statusCode: res.statusCode,
+        };
       },
     },
   }),
