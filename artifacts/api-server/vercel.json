@@ -1,14 +1,14 @@
 {
   "version": 2,
   "functions": {
-    "src/index.ts": {
+    "dist/index.mjs": {
       "runtime": "@vercel/node@5.0.2"
     }
   },
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "src/index.ts"
+      "dest": "dist/index.mjs"
     }
   ]
 }
