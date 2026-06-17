@@ -6,21 +6,9 @@ import http from "http";
 // Export app for Vercel serverless
 export default app;
 
-// Only start server if running locally (not on Vercel)
+// Only start server if running locally
 if (process.env.VERCEL !== "1") {
-  const rawPort = process.env["PORT"];
-
-  if (!rawPort) {
-    throw new Error(
-      "PORT environment variable is required but was not provided.",
-    );
-  }
-
-  const port = Number(rawPort);
-
-  if (Number.isNaN(port) || port <= 0) {
-    throw new Error(`Invalid PORT value: "${rawPort}"`);
-  }
+  const port = Number(process.env.PORT) || 3000;
 
   seed().then(() => {
     const server = http.createServer(app);

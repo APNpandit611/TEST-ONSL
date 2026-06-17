@@ -3,8 +3,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export const COOKIE_NAME = "nepal_admin_session";
 export const COOKIE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-// Allow build to succeed without SESSION_SECRET - will fail at runtime if missing
-const sessionSecret = process.env.SESSION_SECRET || "build-time-placeholder";
+// Falls back at build time - will fail at runtime if SESSION_SECRET is missing
+const sessionSecret = process.env.SESSION_SECRET || "build-time-placeholder-set-in-env";
 
 function sign(value: string): string {
   return createHmac("sha256", sessionSecret).update(value).digest("base64url");

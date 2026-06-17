@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { ClerkProvider, SignIn, SignUp, useClerk } from "@clerk/react";
-import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, useLocation, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
@@ -39,21 +38,17 @@ const queryClient = new QueryClient();
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-);
+// Standard Clerk publishable key from env
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+if (!clerkPubKey) {
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
+}
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
     ? path.slice(basePath.length) || "/"
     : path;
-}
-
-if (!clerkPubKey) {
-  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
 }
 
 const clerkAppearance = {
@@ -102,8 +97,6 @@ const clerkAppearance = {
     dividerLine: "bg-zinc-700",
     alert: "border-zinc-700 bg-zinc-800/50",
     otpCodeFieldInput: "bg-zinc-800 border-zinc-700 text-zinc-50",
-    formFieldRow: "",
-    main: "",
   },
 };
 
@@ -147,79 +140,30 @@ function Router() {
     <Switch>
       <Route path="/sign-in/*?" component={SignInPage} />
       <Route path="/sign-up/*?" component={SignUpPage} />
-
-      <Route path="/">
-        <Layout><Home /></Layout>
-      </Route>
-      <Route path="/fixtures">
-        <Layout><Fixtures /></Layout>
-      </Route>
-      <Route path="/live">
-        <Layout><Live /></Layout>
-      </Route>
-      <Route path="/standings">
-        <Layout><Standings /></Layout>
-      </Route>
-      <Route path="/results">
-        <Layout><Results /></Layout>
-      </Route>
-      <Route path="/teams">
-        <Layout><Teams /></Layout>
-      </Route>
-      <Route path="/stats">
-        <Layout><Stats /></Layout>
-      </Route>
-      <Route path="/about">
-        <Layout><About /></Layout>
-      </Route>
-      <Route path="/announcements">
-        <Layout><Announcements /></Layout>
-      </Route>
-      <Route path="/teams/:id">
-        <SquadPoster />
-      </Route>
-      <Route path="/register">
-        <Layout><JoinKsb /></Layout>
-      </Route>
-      <Route path="/register-team">
-        <Layout><RegisterTeam /></Layout>
-      </Route>
-      <Route path="/update-squad">
-        <Layout><UpdateSquad /></Layout>
-      </Route>
-      <Route path="/admin">
-        <Layout><AdminLogin /></Layout>
-      </Route>
-      <Route path="/admin/dashboard">
-        <AuthGuard><Layout><AdminDashboard /></Layout></AuthGuard>
-      </Route>
-      <Route path="/admin/matches">
-        <AuthGuard><Layout><AdminMatches /></Layout></AuthGuard>
-      </Route>
-      <Route path="/admin/match/:id">
-        <AuthGuard><Layout><AdminMatchDetail /></Layout></AuthGuard>
-      </Route>
-      <Route path="/admin/teams">
-        <AuthGuard><Layout><AdminTeams /></Layout></AuthGuard>
-      </Route>
-      <Route path="/admin/tournament">
-        <AuthGuard><Layout><AdminTournament /></Layout></AuthGuard>
-      </Route>
-      <Route path="/admin/announcements">
-        <AuthGuard><Layout><AdminAnnouncements /></Layout></AuthGuard>
-      </Route>
-      <Route path="/admin/club-applications">
-        <AuthGuard><Layout><AdminClubApplications /></Layout></AuthGuard>
-      </Route>
-      <Route path="/admin/club-settings">
-        <AuthGuard><Layout><AdminClubSettings /></Layout></AuthGuard>
-      </Route>
-      <Route path="/admin/seasons">
-        <AuthGuard><Layout><AdminSeasons /></Layout></AuthGuard>
-      </Route>
-      <Route>
-        <Layout><NotFound /></Layout>
-      </Route>
+      <Route path="/"><Layout><Home /></Layout></Route>
+      <Route path="/fixtures"><Layout><Fixtures /></Layout></Route>
+      <Route path="/live"><Layout><Live /></Layout></Route>
+      <Route path="/standings"><Layout><Standings /></Layout></Route>
+      <Route path="/results"><Layout><Results /></Layout></Route>
+      <Route path="/teams"><Layout><Teams /></Layout></Route>
+      <Route path="/stats"><Layout><Stats /></Layout></Route>
+      <Route path="/about"><Layout><About /></Layout></Route>
+      <Route path="/announcements"><Layout><Announcements /></Layout></Route>
+      <Route path="/teams/:id"><SquadPoster /></Route>
+      <Route path="/register"><Layout><JoinKsb /></Layout></Route>
+      <Route path="/register-team"><Layout><RegisterTeam /></Layout></Route>
+      <Route path="/update-squad"><Layout><UpdateSquad /></Layout></Route>
+      <Route path="/admin"><Layout><AdminLogin /></Layout></Route>
+      <Route path="/admin/dashboard"><AuthGuard><Layout><AdminDashboard /></Layout></AuthGuard></Route>
+      <Route path="/admin/matches"><AuthGuard><Layout><AdminMatches /></Layout></AuthGuard></Route>
+      <Route path="/admin/match/:id"><AuthGuard><Layout><AdminMatchDetail /></Layout></AuthGuard></Route>
+      <Route path="/admin/teams"><AuthGuard><Layout><AdminTeams /></Layout></AuthGuard></Route>
+      <Route path="/admin/tournament"><AuthGuard><Layout><AdminTournament /></Layout></AuthGuard></Route>
+      <Route path="/admin/announcements"><AuthGuard><Layout><AdminAnnouncements /></Layout></AuthGuard></Route>
+      <Route path="/admin/club-applications"><AuthGuard><Layout><AdminClubApplications /></Layout></AuthGuard></Route>
+      <Route path="/admin/club-settings"><AuthGuard><Layout><AdminClubSettings /></Layout></AuthGuard></Route>
+      <Route path="/admin/seasons"><AuthGuard><Layout><AdminSeasons /></Layout></AuthGuard></Route>
+      <Route><Layout><NotFound /></Layout></Route>
     </Switch>
   );
 }
@@ -230,7 +174,6 @@ function ClerkProviderWithRoutes() {
   return (
     <ClerkProvider
       publishableKey={clerkPubKey}
-      proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}

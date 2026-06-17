@@ -21,4 +21,12 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
   },
+  server: {
+    port: Number(process.env.PORT) || 5173,
+    host: "0.0.0.0",
+  },
+  preview: {
+    port: Number(process.env.PORT) || 4173,
+    host: "0.0.0.0",
+  },
 });
