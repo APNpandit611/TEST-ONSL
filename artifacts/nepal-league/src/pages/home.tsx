@@ -653,6 +653,7 @@ export default function Home() {
                                     return 1;
                                 return a.matchNumber - b.matchNumber;
                             })
+                            
                             .map((match) => {
                                 const isFinal = match.matchType === "final";
                                 const isLive = match.status === "live";
