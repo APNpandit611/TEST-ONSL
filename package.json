@@ -12,5 +12,17 @@
   "devDependencies": {
     "prettier": "^3.8.3",
     "typescript": "~5.9.3"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "ignoreMissing": [
+        "pg",
+        "@neondatabase/serverless",
+        "gel"
+      ],
+      "allowAny": [
+        "drizzle-orm"
+      ]
+    }
   }
 }
